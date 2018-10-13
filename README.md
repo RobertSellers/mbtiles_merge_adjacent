@@ -2,6 +2,8 @@
 
 Using Windows Powershell. R CLI & Python 2.7 CLI. 
 
+The following merges two adjacent mbtiles, sharing a latitudinal or longitudinal boundary, regardless of tilespace.
+
 **Run as / with mbtiles in parent dir**
 
 ```
