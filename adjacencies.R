@@ -1,5 +1,5 @@
 #! /usr/bin/Rscript
-print("Running get_adjacencies.R")
+print("Running get_adjacencies.R subprocess")
 args = commandArgs(trailingOnly=TRUE)
 
 con_a = DBI::dbConnect(RSQLite::SQLite(), dbname=args[1])
@@ -29,4 +29,5 @@ df_fake_merge <- rbind(df_a, df_b)
 dupRows <- dupsBetweenGroups(df_fake_merge, "tile_id")
 dupRows_eval <-cbind(df_fake_merge, dup=dupRows)
 dupRows_eval_trueonly <- subset(dupRows_eval, dup==TRUE)
+print(paste0(nrow(dupRows_eval_trueonly), " duplicates found."))
 write.csv(dupRows_eval_trueonly, file = "temp_adj.csv",row.names=FALSE)

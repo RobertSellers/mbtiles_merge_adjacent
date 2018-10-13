@@ -1,22 +1,30 @@
+# Run as python merge_multi.py ..\361.mbtiles ..\362.mbtiles
+
 print("Running merge_multi.py")
 
 import os, sys, sqlite3, cStringIO, StringIO, subprocess, pandas
 from PIL import Image
 
+if (len(sys.argv) < 3):
+	print "Not enough arguments provided"
+	sys.exit()
+	# mb_a = r"E:\mbtiles\sarmap_grid\singles\361.mbtiles"
+	# mb_b = r"E:\mbtiles\sarmap_grid\singles\362.mbtiles"
+
 mb_a =  sys.argv[1]
 mb_b =  sys.argv[2]
-
 basename_a = os.path.splitext(os.path.basename(mb_a))[0]
 basename_b = os.path.splitext(os.path.basename(mb_b))[0]
 
-subprocess.call ("Rscript adjacencies.R "+mb_a+ " " + mb_b, shell=True)
+subprocess.call ("Rscript adjacencies.R " + mb_a + " " + mb_b, shell=True)
+#subprocess.call ("Rscript E:/mbtiles/sarmap_grid/singles/mbtiles_merge_adjacent/adjacencies.R " + mb_a + " " + mb_b, shell=True)
 xyzs = pandas.read_csv('temp_adj.csv')
+#xyzs = pandas.read_csv(r"E:\mbtiles\sarmap_grid\singles\mbtiles_merge_adjacent\temp_adj.csv")
 
 class MbtileSet:
 
-    def __init__(self, mbtiles, outdir=None, origin="bottom"):
+    def __init__(self, mbtiles,origin="bottom"):
         self.conn = sqlite3.connect(mbtiles)
-        self.outdir = outdir
         self.origin = origin
         if self.origin not in ['bottom','top']:
             raise Exception("origin must be either `bottom` or `top`")
@@ -27,91 +35,78 @@ class MbtileSet:
 
 class Mbtile:
 
-    def __init__(self, z, x, y, conn, origin):
-        self.zoom = z
-        self.col = x
-        self.row = y
-        self.conn = conn
-        self.origin = origin
-        self.blank_png_path = r"C:\Users\rober\Desktop\AWS_Tilemill\python\png\blank.png"
-    def get_png(self):
-        c = self.conn.cursor()
-        c.execute('''select tile_data from tiles 
-                      where zoom_level = %s 
-                      and tile_column = %s 
-                      and tile_row = %s''' % (self.zoom,self.col,self.row))
-        row = c.fetchone()
-        if not row:
-            return None
+	def __init__(self, z, x, y, conn, origin):
+		self.zoom = z
+		self.col = x
+		self.row = y
+		self.conn = conn
+		self.origin = origin
 
-        return row[0]
+	def get_rgba(self):
+		c = self.conn.cursor()
+		c.execute('''select tile_data from tiles 
+					where zoom_level = %s 
+					and tile_column = %s 
+					and tile_row = %s''' % (self.zoom,self.col,self.row))
+		row = c.fetchone()
+		if not row:
+			return None
+		raw_tobytes = bytes(row[0])
+		bytes_to_string = cStringIO.StringIO(raw_tobytes)
+		rgba_image = Image.open(bytes_to_string).convert("RGBA")
+		width, height = rgba_image.size
+		datas = rgba_image.load()
+		for y in xrange(height):
+			for x in xrange(width):
+				if datas[x, y] == (204, 221, 221, 255):
+					datas[x, y] = (204, 221, 221, 0)
+				#if datas[x, y] == (204, 220, 220, 255):
+					#datas[x, y] = (204, 220, 220, 0)
+		return rgba_image
 
+	def tile_execute_update(self,pngStrBuffer):
+		c = self.conn.cursor()
+		c.execute('''select tile_id from map 
+				  where zoom_level = %s 
+				  and tile_column = %s 
+				  and tile_row = %s''' % (self.zoom,self.col,self.row))
+		row_fetch = c.fetchone()
+		tile_id = ''.join(row_fetch)
+		c.execute("REPLACE into images(tile_id, tile_data) VALUES(?,?);", (tile_id, pngStrBuffer))
+		print("working " +tile_id+ ", " +str(self.zoom) + ", " + str(self.col) + ", " + str(self.row))
 
-print("Connecting to SQLlite")
+	def commit_changes(self):
+		print ("committing changes")
+		self.conn.commit()
+		self.conn.close()
+
+# load mbtiles class objects
 tileset_a = MbtileSet(mbtiles=mb_a)
 tileset_b = MbtileSet(mbtiles=mb_b)
-print(tileset_a)
-print(tileset_b)
-print("Connecting to SQLlite Success")
 
 for index, row in xyzs.iterrows():
-	t_zoom, t_col, t_row = int(row['zoom_level']), int(row['tile_column']), int(row['tile_row'])
-	tile_a = tileset_a.get_tile(t_zoom, t_col, t_row)
-	tile_b = tileset_b.get_tile(t_zoom, t_col, t_row)
-	raw_a = tile_a.get_png()
-	raw_b = tile_b.get_png()
-	raw_a_tobytes = bytes(raw_a)
-	raw_b_tobytes = bytes(raw_b)
-	cstring_a = cStringIO.StringIO(raw_a_tobytes)
-	cstring_b = cStringIO.StringIO(raw_b_tobytes)
-	rawpng_2RGB_a = Image.open(cstring_a).convert("RGBA")
-	rawpng_2RGB_b = Image.open(cstring_b).convert("RGBA")
-	width_a, height_a = rawpng_2RGB_a.size
-	datas_a = rawpng_2RGB_a.load()
-	for y in xrange(height_a):
-		for x in xrange(width_a):
-			if datas_a[x, y] == (204, 221, 221, 255):
-				datas_a[x, y] = (204, 221, 221, 0)
-	width_b, height_b = rawpng_2RGB_b.size
-	datas_b = rawpng_2RGB_b.load()
-	for y in xrange(height_b):
-		for x in xrange(width_b):
-			if datas_b[x, y] == (204, 221, 221, 255):
-				datas_b[x, y] = (204, 221, 221, 0)
-	merged_two = rawpng_2RGB_b
-	merged_two.paste(rawpng_2RGB_a, (0, 0), rawpng_2RGB_a)
-	
-	cursor_a = tileset_a.conn.cursor()
-	cursor_a.execute('''select tile_id from map 
-				  where zoom_level = %s 
-				  and tile_column = %s 
-				  and tile_row = %s''' % (t_zoom,t_col,t_row))
-	row_a = cursor_a.fetchone()
-	tile_id_a = ''.join(row_a)
-	
-	cursor_b = tileset_b.conn.cursor()
-	cursor_b.execute('''select tile_id from map 
-				  where zoom_level = %s 
-				  and tile_column = %s 
-				  and tile_row = %s''' % (t_zoom,t_col,t_row))
-	row_b = cursor_b.fetchone()
 
-	tile_id_b = ''.join(row_b)
+	# connect to mbtiles/sqllite db as class
+	tile_a = tileset_a.get_tile(int(row['zoom_level']), int(row['tile_column']), int(row['tile_row']))
+	tile_b = tileset_b.get_tile(int(row['zoom_level']), int(row['tile_column']), int(row['tile_row']))
 
-	sql_test_update_tile = 'SELECT tile_data FROM images WHERE tile_id = "'+tile_id_b+'";'
-	cursor_a.execute(sql_test_update_tile)
-	tile_data = cursor_a.fetchone()
-	
+	# convert binary png blob to rgba, background color made transparent
+	rawpng_2RGB_a = tile_a.get_rgba()
+	rawpng_2RGB_b = tile_b.get_rgba()
+
+	# perform composite on each image
+	rawpng_2RGB_b.paste(rawpng_2RGB_a, (0, 0), rawpng_2RGB_a)
+
+	# create in memory binary png file
 	temp = StringIO.StringIO() # this is a file object
-	merged_two.save(temp, "PNG")
+	rawpng_2RGB_b.save(temp, "PNG") # save temp file in memory
 	pngStr = temp.getvalue()
-	pngStrBuffer = buffer(pngStr)
-	
-	cursor_a.execute("REPLACE into images(tile_id, tile_data) VALUES(?,?);", (tile_id_a, pngStrBuffer))
+	pngStrBuffer = buffer(pngStr) # convert png back to binary/buffer
 
-	tileset_a.conn.commit()
-	tileset_b.conn.commit()
-	print("working " +tile_id_b)
-	print("merged "+ str(t_zoom)+ ", "+ str(t_col)+ ", "+ str(t_row))
+	# Send replace execution on sqllite db
+	tile_id_a = tile_a.tile_execute_update(pngStrBuffer)
+	#tile_id_b = tile_b.tile_execute_update(pngStrBuffer)
 
-subprocess.call ("sh mbtiles_patch.sh "+mb_a+ " " + mb_b, shell=True)
+tile_a.commit_changes()
+#tile_b.commit_changes()
+subprocess.call ("sh mbtiles_patch.sh " + mb_a + " " + mb_b, shell=True)
