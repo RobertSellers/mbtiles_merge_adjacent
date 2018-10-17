@@ -8,6 +8,8 @@ query_a <- DBI::dbSendQuery(con_a, "SELECT * FROM map")
 query_b <- DBI::dbSendQuery(con_b, "SELECT * FROM map")
 df_a <- DBI::dbFetch(query_a, n = -1)
 df_b <- DBI::dbFetch(query_b, n = -1)
+suppressWarnings(DBI::dbDisconnect(con_a))
+suppressWarnings(DBI::dbDisconnect(con_b))
 
 dupsBetweenGroups <- function (df, idcol) {
   datacols <- setdiff(names(df), idcol)
