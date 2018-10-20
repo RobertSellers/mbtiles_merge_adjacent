@@ -17,6 +17,7 @@ basename_a = os.path.splitext(os.path.basename(mb_a))[0]
 basename_b = os.path.splitext(os.path.basename(mb_b))[0]
 
 subprocess.call ("Rscript adjacencies.R " + mb_a + " " + mb_b, shell=True)
+print("R Script Complete")
 #subprocess.call ("Rscript E:/mbtiles/sarmap_grid/singles/mbtiles_merge_adjacent/adjacencies.R " + mb_a + " " + mb_b, shell=True)
 xyzs = pandas.read_csv('temp_adj.csv')
 #xyzs = pandas.read_csv(r"E:\mbtiles\sarmap_grid\singles\mbtiles_merge_adjacent\temp_adj.csv")
@@ -58,10 +59,10 @@ class Mbtile:
 		datas = rgba_image.load()
 		for y in xrange(height):
 			for x in xrange(width):
-				if datas[x, y] == (204, 221, 221, 255):
-					datas[x, y] = (204, 221, 221, 0)
-				#if datas[x, y] == (204, 220, 220, 255):
-					#datas[x, y] = (204, 220, 220, 0)
+				# New background color
+				# Finds @backgroundcolor CartoCSS style
+				if datas[x, y] == (221, 220, 222, 255):
+					datas[x, y] = (221, 220, 222, 0)
 		return rgba_image
 
 	def tile_execute_update(self,pngStrBuffer):
@@ -97,6 +98,14 @@ for index, row in xyzs.iterrows():
 	# perform composite on each image
 	rawpng_2RGB_b.paste(rawpng_2RGB_a, (0, 0), rawpng_2RGB_a)
 
+	# Revert transparencies to alpha 100%
+	width, height = rawpng_2RGB_b.size
+	datas_merged = rawpng_2RGB_b.load()
+	for y in xrange(height):
+		for x in xrange(width):
+			if datas_merged[x, y] == (221, 220, 222, 0):
+				datas_merged[x, y] = (221, 220, 222, 255)
+
 	# create in memory binary png file
 	temp = StringIO.StringIO() # this is a file object
 	rawpng_2RGB_b.save(temp, "PNG") # save temp file in memory
@@ -106,6 +115,7 @@ for index, row in xyzs.iterrows():
 	# Send replace execution on sqllite db
 	tile_id_a = tile_a.tile_execute_update(pngStrBuffer)
 	#tile_id_b = tile_b.tile_execute_update(pngStrBuffer)
+
 
 tile_a.commit_changes()
 #tile_b.commit_changes()
