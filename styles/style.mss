@@ -72,9 +72,9 @@
 // @sans_lt_italic: "Open Sans Italic";
 // @sans_lt: "Open Sans Light";
 
-Map {
-  background-color: @backgroundcolor;
-}
+//Map {
+//  background-color: @backgroundcolor;
+//}
 
 // =====================================================================
 //   ADMIN BOUNDARIES
